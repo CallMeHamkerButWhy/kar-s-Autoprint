@@ -1,6 +1,7 @@
 import { jsonError, parsePaperSize } from "@/lib/api";
 import { newId } from "@/lib/ids";
-import { mutate } from "@/lib/store";
+import { currentShop } from "@/lib/session";
+import { mutate, shopPrinters } from "@/lib/store";
 import type { PaperSize, Printer, PrinterRole } from "@/lib/types";
 
 const ROLES: PrinterRole[] = ["bw", "color", "photo", "a3"];
@@ -35,9 +36,13 @@ export async function POST(request: Request) {
     ? (body.paperSizes.map((size) => parsePaperSize(size)) as PaperSize[])
     : [];
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const result = await mutate((db) => {
+    const owned = shopPrinters(db, signedIn.id);
     if (
-      db.printers.some(
+      owned.some(
         (printer) => printer.systemName.toLowerCase() === systemName.toLowerCase(),
       )
     ) {
@@ -46,12 +51,13 @@ export async function POST(request: Request) {
 
     const printer: Printer = {
       id: newId("prn"),
+      shopId: signedIn.id,
       name,
       systemName,
       roles: parseRoles(body.roles),
       duplexCapable: body.duplexCapable === true,
       paperSizes: paperSizes.length > 0 ? paperSizes : ["A4"],
-      isDefault: db.printers.length === 0 || body.isDefault === true,
+      isDefault: owned.length === 0 || body.isDefault === true,
       createdAt: new Date().toISOString(),
       lastSeenAt: null,
       agentVersion: null,
@@ -59,7 +65,7 @@ export async function POST(request: Request) {
     };
 
     if (printer.isDefault) {
-      for (const item of db.printers) item.isDefault = false;
+      for (const item of owned) item.isDefault = false;
     }
     db.printers.push(printer);
     return printer;

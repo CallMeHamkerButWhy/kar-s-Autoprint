@@ -1,3 +1,4 @@
+import { shopJobs, shopPrinters } from "@/lib/store";
 import type { Database, PrintJob, Printer, Shop } from "@/lib/types";
 
 export const AGENT_ONLINE_WINDOW_MS = 90_000;
@@ -41,18 +42,21 @@ function startOfToday() {
   return date.getTime();
 }
 
-export function buildStats(db: Database): DashboardStats {
+export function buildStats(
+  jobs: PrintJob[],
+  printers: Printer[],
+): DashboardStats {
   const now = Date.now();
   const midnight = startOfToday();
 
-  const printedToday = db.jobs.filter(
+  const printedToday = jobs.filter(
     (job) => job.printedAt && new Date(job.printedAt).getTime() >= midnight,
   );
-  const finished = db.jobs.filter(
+  const finished = jobs.filter(
     (job) => job.status === "printed" || job.status === "failed",
   );
 
-  const durations = db.jobs
+  const durations = jobs
     .filter((job) => job.printedAt)
     .map(
       (job) =>
@@ -63,15 +67,15 @@ export function buildStats(db: Database): DashboardStats {
     .filter((seconds) => seconds >= 0)
     .sort((a, b) => a - b);
 
-  const paid = db.jobs.filter((job) => job.payment.status === "paid");
+  const paid = jobs.filter((job) => job.payment.status === "paid");
 
   return {
-    waiting: db.jobs.filter((job) => job.status === "queued").length,
-    printing: db.jobs.filter((job) => job.status === "printing").length,
-    awaitingPayment: db.jobs.filter((job) => job.status === "awaiting_payment").length,
-    awaitingApproval: db.jobs.filter((job) => job.status === "awaiting_approval")
+    waiting: jobs.filter((job) => job.status === "queued").length,
+    printing: jobs.filter((job) => job.status === "printing").length,
+    awaitingPayment: jobs.filter((job) => job.status === "awaiting_payment").length,
+    awaitingApproval: jobs.filter((job) => job.status === "awaiting_approval")
       .length,
-    failed: db.jobs.filter((job) => job.status === "failed").length,
+    failed: jobs.filter((job) => job.status === "failed").length,
     printsToday: printedToday.length,
     pagesToday: printedToday.reduce((total, job) => total + job.totalPages, 0),
     earningsToday: paid
@@ -79,7 +83,7 @@ export function buildStats(db: Database): DashboardStats {
         (job) => job.payment.paidAt && new Date(job.payment.paidAt).getTime() >= midnight,
       )
       .reduce((total, job) => total + job.amount, 0),
-    earningsPending: db.jobs
+    earningsPending: jobs
       .filter(
         (job) =>
           job.payment.status === "pending" &&
@@ -88,9 +92,9 @@ export function buildStats(db: Database): DashboardStats {
       )
       .reduce((total, job) => total + job.amount, 0),
     earningsTotal: paid.reduce((total, job) => total + job.amount, 0),
-    printersOnline: db.printers.filter((printer) => isPrinterOnline(printer, now))
+    printersOnline: printers.filter((printer) => isPrinterOnline(printer, now))
       .length,
-    printersTotal: db.printers.length,
+    printersTotal: printers.length,
     medianSecondsToPrint:
       durations.length === 0
         ? null
@@ -106,23 +110,25 @@ export function buildStats(db: Database): DashboardStats {
   };
 }
 
-export function buildDashboard(db: Database): DashboardPayload {
+export function buildDashboard(db: Database, shop: Shop): DashboardPayload {
   const now = Date.now();
-  const online = db.printers.filter((printer) => isPrinterOnline(printer, now));
-  const stats = buildStats(db);
+  const jobs = shopJobs(db, shop.id);
+  const printers = shopPrinters(db, shop.id);
+  const online = printers.filter((printer) => isPrinterOnline(printer, now));
+  const stats = buildStats(jobs, printers);
 
-  const blocked = !db.shop.autoPrintEnabled
+  const blocked = !shop.autoPrintEnabled
     ? ("auto_print_off" as const)
-    : !db.shop.isOpen
+    : !shop.isOpen
       ? ("shop_closed" as const)
-      : db.printers.length === 0
+      : printers.length === 0
         ? ("no_printer" as const)
         : null;
 
   return {
-    shop: db.shop,
-    printers: db.printers,
-    jobs: db.jobs.slice(0, 150),
+    shop,
+    printers,
+    jobs: jobs.slice(0, 150),
     stats,
     agentOnline: online.length > 0,
     agentVersion: online[0]?.agentVersion ?? null,

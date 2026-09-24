@@ -1,5 +1,6 @@
 import { jsonError, parsePaperSize } from "@/lib/api";
-import { mutate } from "@/lib/store";
+import { currentShop } from "@/lib/session";
+import { mutate, shopJobs, shopPrinters } from "@/lib/store";
 import type { PaperSize, PrinterRole } from "@/lib/types";
 
 const ROLES: PrinterRole[] = ["bw", "color", "photo", "a3"];
@@ -18,8 +19,12 @@ export async function PATCH(
     return jsonError(400, "Body must be JSON");
   }
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const result = await mutate((db) => {
-    const printer = db.printers.find((item) => item.id === id);
+    const owned = shopPrinters(db, signedIn.id);
+    const printer = owned.find((item) => item.id === id);
     if (!printer) return "missing" as const;
 
     if (typeof body.name === "string" && body.name.trim()) {
@@ -41,7 +46,7 @@ export async function PATCH(
       ) as PaperSize[];
     }
     if (body.isDefault === true) {
-      for (const item of db.printers) item.isDefault = item.id === printer.id;
+      for (const item of owned) item.isDefault = item.id === printer.id;
     }
 
     return printer;
@@ -58,14 +63,18 @@ export async function DELETE(
 ) {
   const { id } = await ctx.params;
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const result = await mutate((db) => {
-    const printer = db.printers.find((item) => item.id === id);
+    const printer = shopPrinters(db, signedIn.id).find((item) => item.id === id);
     if (!printer) return "missing" as const;
 
     db.printers = db.printers.filter((item) => item.id !== id);
-    if (printer.isDefault && db.printers.length > 0) db.printers[0].isDefault = true;
-    for (const job of db.jobs) {
-      if (job.printerId === id) job.printerId = db.printers[0]?.id ?? null;
+    const left = shopPrinters(db, signedIn.id);
+    if (printer.isDefault && left.length > 0) left[0].isDefault = true;
+    for (const job of shopJobs(db, signedIn.id)) {
+      if (job.printerId === id) job.printerId = left[0]?.id ?? null;
     }
     return "ok" as const;
   });

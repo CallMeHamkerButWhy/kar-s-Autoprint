@@ -1,5 +1,6 @@
 import { clampInt, jsonError } from "@/lib/api";
-import { mutate } from "@/lib/store";
+import { currentShop } from "@/lib/session";
+import { findShop, mutate } from "@/lib/store";
 import type { PageRangeTier, PaymentMode, SupplyStatus } from "@/lib/types";
 
 const PAYMENT_MODES: PaymentMode[] = ["counter", "online", "both"];
@@ -20,8 +21,12 @@ export async function PATCH(request: Request) {
     return jsonError(400, "Body must be JSON");
   }
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const shop = await mutate((db) => {
-    const target = db.shop;
+    const target = findShop(db, signedIn.id);
+    if (!target) return null;
 
     if (typeof body.name === "string" && body.name.trim()) {
       target.name = body.name.trim().slice(0, 60);
@@ -105,5 +110,6 @@ export async function PATCH(request: Request) {
     return target;
   });
 
+  if (!shop) return jsonError(404, "That shop no longer exists.");
   return Response.json({ shop });
 }

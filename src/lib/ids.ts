@@ -23,3 +23,20 @@ export function newApiKey(): string {
 export function newAgentToken(): string {
   return `agt_${randomBytes(24).toString("base64url")}`;
 }
+
+export function newSessionToken(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+/**
+ * The ID the shop reads out and prints on its QR poster, so it avoids
+ * characters people mix up when typing it into the agent.
+ */
+export function newShopId(): string {
+  const bytes = randomBytes(8);
+  let code = "";
+  for (const byte of bytes) {
+    code += CODE_ALPHABET[byte % CODE_ALPHABET.length];
+  }
+  return `SHOP_${code}`;
+}

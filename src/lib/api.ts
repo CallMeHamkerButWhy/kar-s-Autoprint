@@ -1,4 +1,4 @@
-import type { ColorMode, Database, PaperSize } from "@/lib/types";
+import type { ColorMode, Database, PaperSize, Shop } from "@/lib/types";
 import { PAPER_SIZES } from "@/lib/types";
 
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
@@ -45,16 +45,28 @@ function tokensMatch(a: string, b: string) {
   return diff === 0;
 }
 
-export function checkAgentToken(request: Request, db: Database) {
+export type ShopLookup =
+  | { ok: true; shop: Shop }
+  | { ok: false; reason: "missing" | "invalid" };
+
+/**
+ * The token itself says which shop is calling, so one server can hold many
+ * shops without an agent ever naming someone else's.
+ */
+export function shopByAgentToken(request: Request, db: Database): ShopLookup {
   const token = presentedToken(request, "x-agent-token");
-  if (!token) return "missing" as const;
-  return tokensMatch(token, db.shop.agentToken) ? ("ok" as const) : ("invalid" as const);
+  if (!token) return { ok: false, reason: "missing" };
+  const shop = db.shops.find(
+    (item) => item.agentToken !== "" && tokensMatch(token, item.agentToken),
+  );
+  return shop ? { ok: true, shop } : { ok: false, reason: "invalid" };
 }
 
-export function checkApiKey(request: Request, db: Database) {
+export function shopByApiKey(request: Request, db: Database): ShopLookup {
   const token = presentedToken(request, "x-api-key");
-  if (!token) return "missing" as const;
-  return tokensMatch(token, db.shop.apiKey) ? ("ok" as const) : ("invalid" as const);
+  if (!token) return { ok: false, reason: "missing" };
+  const shop = db.shops.find((item) => tokensMatch(token, item.apiKey));
+  return shop ? { ok: true, shop } : { ok: false, reason: "invalid" };
 }
 
 export function authFailure(result: "missing" | "invalid", kind: "agent token" | "API key") {

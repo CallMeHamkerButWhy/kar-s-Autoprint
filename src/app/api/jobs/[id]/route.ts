@@ -1,4 +1,5 @@
 import { jsonError } from "@/lib/api";
+import { currentShop } from "@/lib/session";
 import {
   addEvent,
   approveJob,
@@ -8,6 +9,7 @@ import {
   purgeUnreferencedFiles,
   routePrinter,
   setStatus,
+  shopJobs,
 } from "@/lib/store";
 
 type Action = "approve" | "collect" | "retry" | "cancel";
@@ -35,8 +37,11 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]">
     return jsonError(400, "action must be approve, collect, retry, or cancel");
   }
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const outcome = await mutate(async (db): Promise<Outcome> => {
-    const job = db.jobs.find((item) => item.id === id);
+    const job = shopJobs(db, signedIn.id).find((item) => item.id === id);
     if (!job) return { error: { status: 404, message: "Unknown job" } };
 
     if (action === "approve") {
@@ -94,7 +99,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/jobs/[id]">
       document.error = null;
     }
 
-    const printer = routePrinter(db, job.documents);
+    const printer = routePrinter(db, signedIn.id, job.documents);
     job.printerId = printer?.id ?? null;
     setStatus(
       job,

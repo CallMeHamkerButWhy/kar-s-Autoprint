@@ -1,6 +1,7 @@
 import { jsonError } from "@/lib/api";
 import { newAgentToken, newApiKey } from "@/lib/ids";
-import { mutate } from "@/lib/store";
+import { currentShop } from "@/lib/session";
+import { findShop, mutate, shopPrinters } from "@/lib/store";
 
 /**
  * POST /api/settings/rotate — issue a new credential.
@@ -20,18 +21,25 @@ export async function POST(request: Request) {
     return jsonError(400, "credential must be 'agentToken' or 'apiKey'");
   }
 
+  const signedIn = await currentShop();
+  if (!signedIn) return jsonError(401, "Sign in to your shop first.");
+
   const shop = await mutate((db) => {
+    const target = findShop(db, signedIn.id);
+    if (!target) return null;
+
     if (body.credential === "agentToken") {
-      db.shop.agentToken = newAgentToken();
-      for (const printer of db.printers) {
+      target.agentToken = newAgentToken();
+      for (const printer of shopPrinters(db, target.id)) {
         printer.lastSeenAt = null;
         printer.agentVersion = null;
       }
     } else {
-      db.shop.apiKey = newApiKey();
+      target.apiKey = newApiKey();
     }
-    return db.shop;
+    return target;
   });
 
+  if (!shop) return jsonError(404, "That shop no longer exists.");
   return Response.json({ shop });
 }

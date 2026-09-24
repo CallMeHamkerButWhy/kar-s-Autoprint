@@ -1,5 +1,6 @@
 import { jsonError } from "@/lib/api";
-import { getDatabase, readStoredFile } from "@/lib/store";
+import { currentShop } from "@/lib/session";
+import { getDatabase, readStoredFile, shopJobs } from "@/lib/store";
 
 /**
  * GET /api/jobs/:id/documents/:docId — lets the counter check a document before
@@ -11,8 +12,10 @@ export async function GET(
 ) {
   const { id, docId } = await ctx.params;
   const db = await getDatabase();
+  const shop = await currentShop(db);
+  if (!shop) return jsonError(401, "Sign in to your shop first.");
 
-  const job = db.jobs.find((item) => item.id === id);
+  const job = shopJobs(db, shop.id).find((item) => item.id === id);
   if (!job) return jsonError(404, "Unknown job");
 
   const document = job.documents.find((item) => item.id === docId);

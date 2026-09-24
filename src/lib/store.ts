@@ -1,8 +1,9 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { newAgentToken, newApiKey, newId, newJobCode } from "@/lib/ids";
+import { hashSessionToken, sessionExpiry } from "@/lib/auth";
+import { newAgentToken, newApiKey, newId, newJobCode, newSessionToken } from "@/lib/ids";
 import { priceDocument } from "@/lib/pricing";
 import type {
   ColorMode,
@@ -35,13 +36,19 @@ function withLock<T>(task: () => Promise<T>): Promise<T> {
   return result;
 }
 
-function defaultShop(): Shop {
-  const suffix = randomBytes(4).toString("hex").toUpperCase();
+export function buildShop(input: {
+  id: string;
+  name: string;
+  passwordHash: string;
+  phone?: string;
+  address?: string;
+}): Shop {
   return {
-    id: process.env.AUTOPRINT_SHOP_ID?.toUpperCase() || `SHOP_${suffix}`,
-    name: "My Print Shop",
-    phone: "",
-    address: "",
+    id: input.id,
+    name: input.name,
+    passwordHash: input.passwordHash,
+    phone: input.phone ?? "",
+    address: input.address ?? "",
     isOpen: true,
     supplyStatus: "ok",
     notice: null,
@@ -72,15 +79,56 @@ async function ensureDirs() {
   await mkdir(FILES_DIR, { recursive: true });
 }
 
+const EMPTY: Database = {
+  version: 2,
+  shops: [],
+  printers: [],
+  jobs: [],
+  sessions: [],
+};
+
+/**
+ * Version 1 kept a single `shop` and unscoped printers. Lift those into the
+ * multi-shop shape rather than making an existing install start over.
+ */
+function migrate(raw: Record<string, unknown>): Database {
+  if (typeof raw.version === "number" && raw.version >= 2) {
+    const db = raw as unknown as Database;
+    db.sessions ??= [];
+    db.shops ??= [];
+    return db;
+  }
+
+  const legacy = raw.shop as (Shop & { id: string }) | undefined;
+  const printers = (raw.printers as Printer[] | undefined) ?? [];
+  if (legacy) {
+    // The old file had no password; the owner sets one on first login.
+    legacy.passwordHash ??= "";
+    for (const printer of printers) printer.shopId ??= legacy.id;
+  }
+
+  return {
+    version: 2,
+    shops: legacy ? [legacy] : [],
+    printers,
+    jobs: (raw.jobs as PrintJob[] | undefined) ?? [],
+    sessions: [],
+  };
+}
+
 async function readDatabase(): Promise<Database> {
+  let raw: Record<string, unknown>;
   try {
-    return JSON.parse(await readFile(DB_PATH, "utf8")) as Database;
+    raw = JSON.parse(await readFile(DB_PATH, "utf8")) as Record<string, unknown>;
   } catch {
-    // Printers are not invented here: the agent reports what the shop really has.
-    const fresh: Database = { shop: defaultShop(), printers: [], jobs: [] };
+    const fresh = structuredClone(EMPTY);
     await writeDatabase(fresh);
     return fresh;
   }
+
+  const migrated = migrate(raw);
+  if (raw.version !== migrated.version) await writeDatabase(migrated);
+  return migrated;
 }
 
 async function writeDatabase(db: Database) {
@@ -108,17 +156,34 @@ export function mutate<T>(task: (db: Database) => Promise<T> | T): Promise<T> {
   });
 }
 
+/** Shops, printers and jobs all live in one file, so scope every read. */
+export function findShop(db: Database, shopId: string | null | undefined) {
+  if (!shopId) return null;
+  const wanted = shopId.trim().toUpperCase();
+  return db.shops.find((shop) => shop.id.toUpperCase() === wanted) ?? null;
+}
+
+export function shopPrinters(db: Database, shopId: string) {
+  return db.printers.filter((printer) => printer.shopId === shopId);
+}
+
+export function shopJobs(db: Database, shopId: string) {
+  return db.jobs.filter((job) => job.shopId === shopId);
+}
+
 /** An agent that died mid-print must not leave a job stuck forever. */
 function requeueStaleJobs(db: Database): boolean {
-  const cutoff = Date.now() - db.shop.claimTimeoutSeconds * 1000;
   let changed = false;
 
   for (const job of db.jobs) {
     if (job.status !== "printing" || !job.claimedAt) continue;
+    const shop = findShop(db, job.shopId);
+    if (!shop) continue;
+    const cutoff = Date.now() - shop.claimTimeoutSeconds * 1000;
     if (new Date(job.claimedAt).getTime() > cutoff) continue;
 
     const reason = "The shop computer stopped responding mid-print";
-    if (job.attempts >= db.shop.maxAttempts) {
+    if (job.attempts >= shop.maxAttempts) {
       job.lastError = reason;
       setStatus(job, "failed", "failed", reason);
     } else {
@@ -237,16 +302,16 @@ function bestOf(printers: Printer[]): Printer | null {
  */
 export function routePrinter(
   db: Database,
+  shopId: string,
   documents: JobDocument[],
   { among }: { among?: string[] } = {},
 ): Printer | null {
+  const owned = shopPrinters(db, shopId);
   const allowed = among?.map((name) => name.toLowerCase());
   const pool =
     allowed && allowed.length > 0
-      ? db.printers.filter((printer) =>
-          allowed.includes(printer.systemName.toLowerCase()),
-        )
-      : db.printers;
+      ? owned.filter((printer) => allowed.includes(printer.systemName.toLowerCase()))
+      : owned;
   if (pool.length === 0) return null;
 
   const needs: PrinterRole[] = [];
@@ -266,13 +331,14 @@ export function routePrinter(
 
 export async function createJob(
   db: Database,
+  shop: Shop,
   input: CreateJobInput,
 ): Promise<PrintJob> {
   const now = new Date().toISOString();
   const documents: JobDocument[] = [];
 
   for (const document of input.documents) {
-    const { amount } = priceDocument(db.shop.rates, document);
+    const { amount } = priceDocument(shop.rates, document);
     documents.push({
       id: newId("doc"),
       fileName: document.fileName,
@@ -293,7 +359,7 @@ export async function createJob(
   const job: PrintJob = {
     id: newId("job"),
     code: newJobCode(),
-    shopId: db.shop.id,
+    shopId: shop.id,
     createdAt: now,
     updatedAt: now,
     status: "awaiting_payment",
@@ -332,7 +398,7 @@ export async function createJob(
     ],
   };
 
-  const printer = routePrinter(db, documents);
+  const printer = routePrinter(db, shop.id, documents);
   job.printerId = printer?.id ?? null;
   if (printer) {
     addEvent(job, "routed", `Routed to ${printer.name}`);
@@ -348,8 +414,8 @@ export async function createJob(
  * Puts a job in front of the printer: straight into the queue, or into the
  * approval list when the counter wants to eyeball jobs first.
  */
-export function release(db: Database, job: PrintJob) {
-  if (db.shop.approvalMode === "manual") {
+export function release(shop: Shop, job: PrintJob) {
+  if (shop.approvalMode === "manual") {
     setStatus(
       job,
       "awaiting_approval",
@@ -362,12 +428,12 @@ export function release(db: Database, job: PrintJob) {
 }
 
 /** Online payment landed, so the job can print without anyone touching it. */
-export function markPaid(db: Database, job: PrintJob, reference: string) {
+export function markPaid(shop: Shop, job: PrintJob, reference: string) {
   job.payment.status = "paid";
   job.payment.paidAt = new Date().toISOString();
   job.payment.reference = reference;
   addEvent(job, "paid", `Paid online · ${reference}`);
-  release(db, job);
+  release(shop, job);
 }
 
 /** Cash at the counter: the shop owner confirms it later from the dashboard. */
@@ -379,4 +445,50 @@ export function markCashCollected(job: PrintJob) {
 
 export function approveJob(job: PrintJob) {
   setStatus(job, "queued", "approved", "Approved at the counter");
+}
+
+/** Hands back the raw cookie value; only its digest is written to disk. */
+export function startSession(db: Database, shopId: string) {
+  const token = newSessionToken();
+  pruneSessions(db);
+  db.sessions.push({
+    tokenHash: hashSessionToken(token),
+    shopId,
+    createdAt: new Date().toISOString(),
+    expiresAt: sessionExpiry(),
+  });
+  return token;
+}
+
+export function sessionShop(db: Database, token: string | undefined) {
+  if (!token) return null;
+  const hash = hashSessionToken(token);
+  const session = db.sessions.find((item) => item.tokenHash === hash);
+  if (!session) return null;
+  if (new Date(session.expiresAt).getTime() < Date.now()) return null;
+  return findShop(db, session.shopId);
+}
+
+export function endSession(db: Database, token: string | undefined) {
+  if (!token) return;
+  const hash = hashSessionToken(token);
+  db.sessions = db.sessions.filter((item) => item.tokenHash !== hash);
+}
+
+function pruneSessions(db: Database) {
+  const now = Date.now();
+  db.sessions = db.sessions.filter(
+    (item) => new Date(item.expiresAt).getTime() > now,
+  );
+}
+
+/** Deleting a shop must not leave its jobs, files or logins behind. */
+export async function deleteShop(db: Database, shopId: string) {
+  const doomed = shopJobs(db, shopId);
+  const files = doomed.flatMap((job) => detachJobFiles(job));
+  db.jobs = db.jobs.filter((job) => job.shopId !== shopId);
+  db.printers = db.printers.filter((printer) => printer.shopId !== shopId);
+  db.sessions = db.sessions.filter((session) => session.shopId !== shopId);
+  db.shops = db.shops.filter((shop) => shop.id !== shopId);
+  await purgeUnreferencedFiles(db, files);
 }

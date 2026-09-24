@@ -97,6 +97,7 @@ export interface PrintJob {
 
 export interface Printer {
   id: string;
+  shopId: string;
   name: string;
   /** Exact queue name the OS print command expects. */
   systemName: string;
@@ -132,6 +133,8 @@ export interface Rates {
 export interface Shop {
   id: string;
   name: string;
+  /** scrypt digest — see lib/auth.ts. Never leaves the server. */
+  passwordHash: string;
   phone: string;
   address: string;
   isOpen: boolean;
@@ -151,10 +154,22 @@ export interface Shop {
   createdAt: string;
 }
 
+/** One browser logged in to one shop's panel. */
+export interface Session {
+  /** sha256 of the cookie value, so a leaked database cannot log anyone in. */
+  tokenHash: string;
+  shopId: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
 export interface Database {
-  shop: Shop;
+  /** Bumped when the shape changes so old files can be migrated on read. */
+  version: number;
+  shops: Shop[];
   printers: Printer[];
   jobs: PrintJob[];
+  sessions: Session[];
 }
 
 export const PAPER_SIZES: PaperSize[] = [
