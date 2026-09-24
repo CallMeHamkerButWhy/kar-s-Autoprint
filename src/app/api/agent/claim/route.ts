@@ -1,5 +1,5 @@
 import { authFailure, checkAgentToken } from "@/lib/api";
-import { getDatabase, mutate, setStatus } from "@/lib/store";
+import { addEvent, getDatabase, mutate, routePrinter, setStatus } from "@/lib/store";
 
 /**
  * POST /api/agent/claim — hands queued jobs to the shop computer.
@@ -41,10 +41,28 @@ export async function POST(request: Request) {
     for (const job of queue) {
       if (jobs.length >= max) break;
 
-      const printer = database.printers.find((item) => item.id === job.printerId);
-      if (!printer) continue;
-      if (reported.length > 0 && !reported.includes(printer.systemName.toLowerCase())) {
-        continue;
+      let printer = database.printers.find((item) => item.id === job.printerId) ?? null;
+      const unreachable =
+        printer != null &&
+        reported.length > 0 &&
+        !reported.includes(printer.systemName.toLowerCase());
+
+      // The chosen printer may be gone or switched off. If this computer has
+      // another queue that can do the job, move it rather than stall.
+      if (printer == null || unreachable) {
+        const alternative = routePrinter(database, job.documents, { among: reported });
+        if (!alternative) continue;
+        if (alternative.id !== job.printerId) {
+          job.printerId = alternative.id;
+          addEvent(
+            job,
+            "routed",
+            printer
+              ? `Moved to ${alternative.name} — ${printer.name} was not reachable`
+              : `Routed to ${alternative.name}`,
+          );
+        }
+        printer = alternative;
       }
 
       job.attempts += 1;

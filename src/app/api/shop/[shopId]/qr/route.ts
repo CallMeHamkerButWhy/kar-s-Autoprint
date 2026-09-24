@@ -1,6 +1,6 @@
 import QRCode from "qrcode";
 
-import { jsonError } from "@/lib/api";
+import { jsonError, publicBaseUrl } from "@/lib/api";
 import { getDatabase } from "@/lib/store";
 
 /**
@@ -18,8 +18,7 @@ export async function GET(
     return jsonError(404, "No shop with that ID");
   }
 
-  const origin = new URL(request.url).origin;
-  const target = `${origin}/print/${db.shop.id}`;
+  const target = `${publicBaseUrl(request)}/print/${db.shop.id}`;
 
   const svg = await QRCode.toString(target, {
     type: "svg",

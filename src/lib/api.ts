@@ -7,6 +7,29 @@ export function jsonError(status: number, message: string, extra?: object) {
   return Response.json({ error: message, ...extra }, { status });
 }
 
+/**
+ * The address a customer's phone can actually open.
+ *
+ * Behind a tunnel or reverse proxy the server only sees its bind address, and a
+ * QR code pointing at 0.0.0.0 is worthless, so AUTOPRINT_PUBLIC_URL wins and
+ * the forwarded host comes next.
+ */
+export function publicBaseUrl(request: Request) {
+  const configured = process.env.AUTOPRINT_PUBLIC_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+
+  const url = new URL(request.url);
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = (forwardedHost ?? request.headers.get("host") ?? "").split(",")[0].trim();
+  const unusable = host === "" || host.startsWith("0.0.0.0");
+
+  const proto =
+    request.headers.get("x-forwarded-proto")?.split(",")[0].trim() ??
+    url.protocol.replace(":", "");
+
+  return unusable ? url.origin : `${proto}://${host}`;
+}
+
 function presentedToken(request: Request, header: string) {
   const direct = request.headers.get(header);
   if (direct) return direct.trim();

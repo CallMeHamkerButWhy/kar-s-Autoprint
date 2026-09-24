@@ -16,6 +16,7 @@ import { CodeBlock } from "@/components/code-block";
 import { useDashboardData } from "@/components/dashboard-provider";
 import { PageHeader } from "@/components/page-header";
 import { SecretField } from "@/components/secret-field";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -152,6 +153,18 @@ export default function QrPage() {
             <p className="text-center font-mono text-xs break-all text-muted-foreground">
               {customerUrl}
             </p>
+            {/^https?:\/\/(localhost|127\.)/.test(origin) ? (
+              <Alert>
+                <TriangleAlert />
+                <AlertTitle>This QR only works on this computer</AlertTitle>
+                <AlertDescription>
+                  A customer&apos;s phone cannot open a localhost address. Put the
+                  server on your shop network or a public URL, then set{" "}
+                  <code className="font-mono">AUTOPRINT_PUBLIC_URL</code> so the QR
+                  points there.
+                </AlertDescription>
+              </Alert>
+            ) : null}
           </CardContent>
         </Card>
 

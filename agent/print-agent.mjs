@@ -102,6 +102,24 @@ async function discoverPrinters() {
   }
 }
 
+/**
+ * Shop owners should see what the printer said, not our command line. execFile
+ * puts the useful part on stderr.
+ */
+function describeError(error) {
+  const stderr = typeof error?.stderr === "string" ? error.stderr.trim() : "";
+  const stdout = typeof error?.stdout === "string" ? error.stdout.trim() : "";
+  const detail = (stderr || stdout).split(/\r?\n/)[0];
+  if (detail) return detail.replace(/^lp:\s*/i, "").trim();
+
+  if (error?.code === "ENOENT") {
+    return IS_WINDOWS
+      ? "Could not find a way to print on this computer"
+      : "The lp command is missing — CUPS is not installed on this computer";
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 function cupsOptions(document) {
   const options = [
     "-n",
@@ -186,7 +204,7 @@ async function handleJob(job) {
         log("info", `  printed ${document.fileName} via ${via}`);
         reports.push({ id: document.id, ok: true });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = describeError(error);
         log("error", `  failed ${document.fileName}: ${message}`);
         reports.push({ id: document.id, ok: false, error: message });
         failure = failure ?? message;

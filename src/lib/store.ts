@@ -68,38 +68,6 @@ function defaultShop(): Shop {
   };
 }
 
-function defaultPrinters(): Printer[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: newId("prn"),
-      name: "Counter laser (B&W)",
-      systemName: "HP_LaserJet_M1005",
-      roles: ["bw"],
-      duplexCapable: false,
-      paperSizes: ["A4", "A5", "Letter", "Legal"],
-      isDefault: true,
-      createdAt: now,
-      lastSeenAt: null,
-      agentVersion: null,
-      reportedByAgent: false,
-    },
-    {
-      id: newId("prn"),
-      name: "Colour inkjet",
-      systemName: "Epson_L3250",
-      roles: ["color", "photo"],
-      duplexCapable: false,
-      paperSizes: ["A4", "A5", "Letter"],
-      isDefault: false,
-      createdAt: now,
-      lastSeenAt: null,
-      agentVersion: null,
-      reportedByAgent: false,
-    },
-  ];
-}
-
 async function ensureDirs() {
   await mkdir(FILES_DIR, { recursive: true });
 }
@@ -108,11 +76,8 @@ async function readDatabase(): Promise<Database> {
   try {
     return JSON.parse(await readFile(DB_PATH, "utf8")) as Database;
   } catch {
-    const fresh: Database = {
-      shop: defaultShop(),
-      printers: defaultPrinters(),
-      jobs: [],
-    };
+    // Printers are not invented here: the agent reports what the shop really has.
+    const fresh: Database = { shop: defaultShop(), printers: [], jobs: [] };
     await writeDatabase(fresh);
     return fresh;
   }
@@ -246,9 +211,43 @@ export interface CreateJobInput {
   source: PrintJob["source"];
 }
 
-/** Which printer should this job go to, based on what the documents need. */
-export function routePrinter(db: Database, documents: JobDocument[]): Printer | null {
-  if (db.printers.length === 0) return null;
+const REACHABLE_WINDOW_MS = 90_000;
+
+function isReachable(printer: Printer) {
+  if (!printer.lastSeenAt) return false;
+  return Date.now() - new Date(printer.lastSeenAt).getTime() < REACHABLE_WINDOW_MS;
+}
+
+/** A printer the agent can reach beats a nicer one that is switched off. */
+function bestOf(printers: Printer[]): Printer | null {
+  if (printers.length === 0) return null;
+  return (
+    printers.find((printer) => isReachable(printer) && printer.isDefault) ??
+    printers.find(isReachable) ??
+    printers.find((printer) => printer.isDefault) ??
+    printers[0]
+  );
+}
+
+/**
+ * Which printer should this job go to, based on what the documents need.
+ *
+ * Pass `among` to limit the choice to the queues one shop computer reported,
+ * which is how a job survives the owner swapping printers around.
+ */
+export function routePrinter(
+  db: Database,
+  documents: JobDocument[],
+  { among }: { among?: string[] } = {},
+): Printer | null {
+  const allowed = among?.map((name) => name.toLowerCase());
+  const pool =
+    allowed && allowed.length > 0
+      ? db.printers.filter((printer) =>
+          allowed.includes(printer.systemName.toLowerCase()),
+        )
+      : db.printers;
+  if (pool.length === 0) return null;
 
   const needs: PrinterRole[] = [];
   if (documents.some((document) => ["A3", "A2", "A1"].includes(document.paperSize))) {
@@ -258,11 +257,11 @@ export function routePrinter(db: Database, documents: JobDocument[]): Printer | 
   if (documents.every((document) => document.color === "bw")) needs.push("bw");
 
   for (const role of needs) {
-    const match = db.printers.find((printer) => printer.roles.includes(role));
+    const match = bestOf(pool.filter((printer) => printer.roles.includes(role)));
     if (match) return match;
   }
 
-  return db.printers.find((printer) => printer.isDefault) ?? db.printers[0];
+  return bestOf(pool);
 }
 
 export async function createJob(
