@@ -127,6 +127,7 @@ export default function QrPage() {
               <Button
                 size="sm"
                 variant="outline"
+                nativeButton={false}
                 render={
                   <a href={`/api/shop/${shop.id}/qr`} download={`${shop.id}-qr.svg`} />
                 }
@@ -144,6 +145,7 @@ export default function QrPage() {
               </Button>
               <Button
                 size="sm"
+                nativeButton={false}
                 render={<Link href={`/print/${shop.id}`} target="_blank" />}
               >
                 <ExternalLink className="size-4" />

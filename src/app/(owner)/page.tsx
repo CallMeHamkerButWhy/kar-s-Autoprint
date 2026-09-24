@@ -517,13 +517,14 @@ function EmptyQueue({ shopId }: { shopId?: string }) {
           </p>
         </div>
         <div className="flex flex-wrap justify-center gap-2">
-          <Button size="sm" render={<Link href="/qr" />}>
+          <Button size="sm" nativeButton={false} render={<Link href="/qr" />}>
             Get my QR code
           </Button>
           {shopId ? (
             <Button
               size="sm"
               variant="outline"
+              nativeButton={false}
               render={<Link href={`/print/${shopId}`} target="_blank" />}
             >
               Open the customer page

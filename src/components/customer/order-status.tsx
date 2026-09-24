@@ -111,6 +111,7 @@ export function OrderStatus({
         <Button
           variant="outline"
           className="mt-4"
+          nativeButton={false}
           render={<Link href={`/print/${shopId}`} />}
         >
           Start again
@@ -327,6 +328,7 @@ export function OrderStatus({
       <Button
         variant="outline"
         className="w-full"
+        nativeButton={false}
         render={<Link href={`/print/${shopId}`} />}
       >
         Send more files
