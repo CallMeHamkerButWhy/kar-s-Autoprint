@@ -1,4 +1,4 @@
-# Auto Print
+# Kar's Autoprint
 
 A print relay for cyber cafes and print shops. The customer scans the shop's QR
 code, sends files from their own phone, pays, and the print comes out at the

@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Auto Print — scan, upload, pay, print",
+  title: "Kar's Autoprint — scan, upload, pay, print",
   description:
     "Print relay for cyber cafes and print shops: the customer uploads from their phone, the shop's printer prints on its own, and the file is deleted straight after.",
 };

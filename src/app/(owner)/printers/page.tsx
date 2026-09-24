@@ -94,7 +94,7 @@ export default function PrintersPage() {
     <div className="flex min-h-full flex-col">
       <PageHeader
         title="Printers"
-        description="Tell Auto Print which queue prints what. Black & white, colour, photo and A3 jobs each go to the printer you pick."
+        description="Tell Kar's Autoprint which queue prints what. Black & white, colour, photo and A3 jobs each go to the printer you pick."
         actions={
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
             <DialogTrigger render={<Button size="sm" />}>

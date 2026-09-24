@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Auto Print agent — runs on the shop computer, next to the printer.
+ * Kar's Autoprint agent — runs on the shop computer, next to the printer.
  *
  * It does four things, in a loop:
  *   1. tells the server which printer queues this computer can see,
@@ -243,7 +243,7 @@ async function main() {
     process.exit(1);
   }
 
-  log("info", `Auto Print agent v${VERSION} → ${CONFIG.server}`);
+  log("info", `Kar's Autoprint agent v${VERSION} → ${CONFIG.server}`);
   if (CONFIG.dryRun) log("warn", "Dry run: nothing will actually print");
 
   let printers = await discoverPrinters();

@@ -40,7 +40,7 @@ function Brand() {
       </span>
       <span className="min-w-0 leading-tight">
         <span className="block truncate text-sm font-semibold">
-          {data?.shop.name ?? "Auto Print"}
+          {data?.shop.name ?? "Kar's Autoprint"}
         </span>
         <span className="block truncate font-mono text-xs text-muted-foreground">
           {data?.shop.id ?? "Shop panel"}

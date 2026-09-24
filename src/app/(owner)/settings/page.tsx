@@ -456,7 +456,7 @@ function SettingsForm({ shop }: { shop: Shop }) {
             <CardTitle>When a print fails</CardTitle>
             <CardDescription>
               Out of paper, printer asleep, computer restarted — these decide how
-              hard Auto Print tries before it gives up.
+              hard Kar&apos;s Autoprint tries before it gives up.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
