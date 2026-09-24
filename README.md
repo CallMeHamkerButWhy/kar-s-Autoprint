@@ -60,6 +60,12 @@ customers should use:
 AUTOPRINT_PUBLIC_URL="https://print.myshop.in" npm run dev
 ```
 
+Phones on the shop wifi reach the counter PC by its LAN address, so
+`next.config.ts` lists the private ranges under `allowedDevOrigins`. Without
+that, Next treats the phone as a cross-origin visitor and the page loads but
+never becomes interactive. Add your own host there if you serve it from a
+domain or a tunnel in development.
+
 ## How a job flows
 
 1. The customer uploads. Pages are counted, the price comes from the shop's own
