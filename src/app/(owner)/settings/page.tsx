@@ -27,6 +27,12 @@ import { Switch } from "@/components/ui/switch";
 import { formatRupees } from "@/lib/pricing";
 import type { PageRangeTier, PaymentMode, Shop } from "@/lib/types";
 
+const PAYMENT_LABELS: Record<PaymentMode, string> = {
+  counter: "Cash at the counter only",
+  online: "Online payment only",
+  both: "Both — customer chooses",
+};
+
 type Draft = {
   name: string;
   phone: string;
@@ -237,6 +243,7 @@ function SettingsForm({ shop }: { shop: Shop }) {
             <div className="space-y-2">
               <Label>Payment</Label>
               <Select
+                items={PAYMENT_LABELS}
                 value={draft.paymentMode}
                 onValueChange={(value) => {
                   update({ paymentMode: value as PaymentMode });
@@ -247,9 +254,11 @@ function SettingsForm({ shop }: { shop: Shop }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="counter">Cash at the counter only</SelectItem>
-                  <SelectItem value="online">Online payment only</SelectItem>
-                  <SelectItem value="both">Both — customer chooses</SelectItem>
+                  {Object.entries(PAYMENT_LABELS).map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">

@@ -19,11 +19,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import type { Shop, SupplyStatus } from "@/lib/types";
 
-const SUPPLY_OPTIONS: { value: SupplyStatus; label: string }[] = [
-  { value: "ok", label: "All good" },
-  { value: "low_ink", label: "Low on ink" },
-  { value: "out_of_paper", label: "Out of paper" },
-];
+const SUPPLY_LABELS: Record<SupplyStatus, string> = {
+  ok: "All good",
+  low_ink: "Low on ink",
+  out_of_paper: "Out of paper",
+};
 
 /** The switches a counter actually touches during the day. */
 export function ShopControls() {
@@ -111,6 +111,7 @@ function Controls({ shop }: { shop: Shop }) {
         <div className="space-y-2">
           <Label className="text-sm font-medium">Ink and paper</Label>
           <Select
+            items={SUPPLY_LABELS}
             value={shop.supplyStatus}
             disabled={saving}
             onValueChange={(value) =>
@@ -121,9 +122,9 @@ function Controls({ shop }: { shop: Shop }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {SUPPLY_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+              {Object.entries(SUPPLY_LABELS).map(([value, label]) => (
+                <SelectItem key={value} value={value}>
+                  {label}
                 </SelectItem>
               ))}
             </SelectContent>

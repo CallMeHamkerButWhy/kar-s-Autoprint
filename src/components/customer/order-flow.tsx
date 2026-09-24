@@ -44,6 +44,11 @@ interface Pick {
   duplex: boolean;
 }
 
+const COLOR_LABELS: Record<ColorMode, string> = {
+  bw: "Black & white",
+  color: "Colour",
+};
+
 const BASE_SIZES: PaperSize[] = ["A4", "A5", "Legal"];
 const BIG_SIZES: PaperSize[] = ["A3", "A2", "A1"];
 const ACCEPT = ".pdf,.png,.jpg,.jpeg,.webp,application/pdf,image/*";
@@ -348,6 +353,7 @@ export function OrderFlow({ shopId }: { shopId: string }) {
                   <div className="space-y-1">
                     <Label className="text-xs">Print</Label>
                     <Select
+                      items={COLOR_LABELS}
                       value={pick.color}
                       onValueChange={(value) =>
                         update(pick.key, { color: value as ColorMode })
@@ -357,9 +363,9 @@ export function OrderFlow({ shopId }: { shopId: string }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="bw">Black & white</SelectItem>
+                        <SelectItem value="bw">{COLOR_LABELS.bw}</SelectItem>
                         <SelectItem value="color" disabled={!shop.colorEnabled}>
-                          Colour
+                          {COLOR_LABELS.color}
                         </SelectItem>
                       </SelectContent>
                     </Select>
