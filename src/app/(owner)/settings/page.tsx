@@ -356,6 +356,11 @@ function SettingsForm({ shop }: { shop: Shop }) {
                 </p>
               </div>
               <div className="space-y-2">
+                <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+                  <span>From this many sheets</span>
+                  <span>Black &amp; white, per page</span>
+                  <span>Colour, per page</span>
+                </div>
                 {draft.pageRanges.map((tier, index) => (
                   <div key={index} className="grid grid-cols-3 gap-2">
                     <Input
