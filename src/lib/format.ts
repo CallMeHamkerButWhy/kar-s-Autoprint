@@ -1,4 +1,4 @@
-import type { ColorMode, JobStatus } from "@/lib/types";
+import type { ColorMode, JobDocument, JobStatus } from "@/lib/types";
 
 export function formatBytes(bytes: number) {
   if (!bytes) return "—";
@@ -55,4 +55,22 @@ export const STATUS_LABELS: Record<JobStatus, string> = {
 
 export function colorLabel(color: ColorMode) {
   return color === "color" ? "Colour" : "B&W";
+}
+
+function plural(count: number, word: string) {
+  return `${count} ${count === 1 ? word : `${word}s`}`;
+}
+
+/**
+ * Sits under a file name in the queue, so it has to separate how long the file
+ * is from how many times it prints. "2 pages" next to a one-page photo asked
+ * for twice reads as a two-page photo.
+ */
+export function describeDocuments(documents: JobDocument[], totalPages: number) {
+  const [only] = documents;
+  if (documents.length !== 1 || only == null) {
+    return `${plural(documents.length, "file")} · ${plural(totalPages, "page")}`;
+  }
+  const pages = plural(only.pages, "page");
+  return only.copies > 1 ? `${pages} × ${only.copies}` : pages;
 }

@@ -42,7 +42,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { colorLabel, formatClock, timeAgo } from "@/lib/format";
+import { colorLabel, describeDocuments, formatClock, timeAgo } from "@/lib/format";
 import { formatRupees } from "@/lib/pricing";
 import type { JobStatus, PrintJob } from "@/lib/types";
 
@@ -337,8 +337,7 @@ export default function QueuePage() {
                                   : ""}
                               </p>
                               <p className="text-xs text-muted-foreground">
-                                {job.totalPages}{" "}
-                                {job.totalPages === 1 ? "page" : "pages"}
+                                {describeDocuments(job.documents, job.totalPages)}
                                 {first
                                   ? ` · ${first.paperSize} · ${colorLabel(first.color)}`
                                   : ""}
